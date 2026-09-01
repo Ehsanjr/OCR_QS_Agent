@@ -1,0 +1,47 @@
+# =========================
+# Python & Environment
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual Environments
+venv/
+.venv/
+env/
+.env_dir/
+
+# =========================
+# API Keys & Secrets
+# =========================
+# CRITICAL: Never commit your .env file containing HuggingFace or Datalab tokens!
+.env
+.env.local
+.env.*
+
+# =========================
+# Project Specific (Cache & Data)
+# =========================
+# Ignore the mock OCR text cache files we created (e.g., data/q113.png.txt)
+data/*.txt
+data/
+
+# If you generate the final JSON outputs here, you might want to ignore them
+# Output json files generated per block
+*.json
+!sample_blocks.json  # (Optional) Keep this if you have a specific test file to track
+
+# =========================
+# IDE & OS Files
+# =========================
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# =========================
+# Streamlit
+# =========================
+# Ignore Streamlit configurations or local credentials if they get generated
+.streamlit/credentials.toml

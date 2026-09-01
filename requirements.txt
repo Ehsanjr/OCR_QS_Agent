@@ -1,0 +1,8 @@
+langchain
+langgraph
+langchain-huggingface
+pydantic
+python-dotenv
+requests
+opencv-python
+pillow
