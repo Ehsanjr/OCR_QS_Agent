@@ -81,6 +81,3 @@ files reviewed here, so `run_batch.py` and `mock_tools.py` currently use one
 placeholder block/options set for local testing. Replace `BLOCKS` in
 `run_batch.py` (and the `options` for each block) with the real dataset
 before generating your submission's output file.
-
-See `WRITEUP.md` for the retry cap, best-guess policy, and noise-injection
-details required by the brief.
