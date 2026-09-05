@@ -45,3 +45,6 @@ Thumbs.db
 # =========================
 # Ignore Streamlit configurations or local credentials if they get generated
 .streamlit/credentials.toml
+
+*.pdf
+*.docx

@@ -1,128 +1,86 @@
-```markdown
 # OCR-Aware Question Solving Agent
 
-An agentic pipeline built with **LangGraph** and **LangChain** that automatically solves multiple-choice mathematical questions extracted from scanned exam documents. 
+An agent built with LangGraph that solves multiple-choice question blocks
+extracted from scanned exam documents, using both the block's image and its
+OCR text. If the produced answer doesn't match any of the given options, the
+agent treats this as a sign the OCR text is corrupted, re-reads the image,
+corrects the text, and retries — up to a configurable retry cap.
 
-The core feature of this architecture is its **self-correction / refinement loop**: when the reasoning model fails to solve a question or cannot match the output to the provided options, it treats the failure as a sign of OCR corruption. It then routes the context to a dedicated Refiner node to fix noise, look-alike Persian character swaps, and garbled LaTeX math formulas before re-solving.
+## Files
 
----
+- `agent.py` — LangGraph agent: solver node, refiner node, finalize
+  (best-guess) node, and `build_output()` for the required JSON schema.
+- `utils.py` — synthetic OCR-noise injector for testing (character + word
+  level), returns the exact number of perturbations applied.
+- `mock_tools.py` — cached/mock OCR text + placeholder options for local
+  testing without spending OCR API credits.
+- `ocr_tools.py` — real OCR via the Datalab API.
+- `run_batch.py` — runs the agent over a set of question blocks and writes
+  one JSON object per block (`outputs.json`), matching the required schema.
+- `check_models.py` — lists available free-tier Hugging Face models,
+  including a vision-capable ("image-text-to-text") search to help pick a
+  model that can actually see the question images.
+- `app.py` — optional Streamlit dashboard for visually stepping through the
+  agent's decisions (not part of the required deliverable — added for local
+  debugging).
 
-## 🛠️ Tech Stack & Dependencies
+## OCR provider
 
-- **Orchestration Engine**: [LangGraph](https://github.com/langchain-ai/langgraph) (Graph-based state machine for agentic workflows)
-- **Language Model Infrastructure**: [Hugging Face Inference API](https://huggingface.co/docs/api-inference/index) using `Qwen/Qwen2.5-7B-Instruct`
-- **OCR Engine**: [Datalab OCR API](https://www.datalab.to/)
-- **Visual Debugger / UI**: [Streamlit](https://streamlit.io/)
-- **Environment & Logic**: Python 3.10+
+**Datalab OCR API** (`ocr_tools.py`), using the $15 free-credit tier.
 
----
+## Setup
 
-## 🚀 Getting Started
+1. Create a `.env` file with:
+   ```
+   HF_API_KEY=your_huggingface_token
+   DATALAB_API_KEY=your_datalab_key
+   HF_MODEL_ID=your_chosen_vision_model_id   # see warning below
+   ```
+2. Install dependencies in your existing virtual environment — no new
+   packages were introduced beyond what the project already used
+   (`streamlit`, `python-dotenv`, `langchain-core`, `langchain-huggingface`,
+   `langgraph`, `huggingface_hub`, `requests`).
+3. Run the agent on a single block:
+   ```
+   python agent.py
+   ```
+4. Run over a batch of blocks and produce the required JSON output:
+   ```
+   python run_batch.py
+   ```
+5. (Optional) Visual dashboard:
+   ```
+   streamlit run app.py
+   ```
 
-### 1. Prerequisites & Installation
+## ⚠️ Important: vision-model requirement
 
-Clone the repository and set up a virtual environment:
+The brief requires the agent to look at the question **image**, not just the
+OCR text — both to solve the question and to spot likely misreads while
+correcting it. The model used in the original version (`openai/gpt-oss-120b`)
+is text-only.
 
-```bash
-git clone <YOUR_REPOSITORY_URL>
-cd OCR_QS_Agent
+`agent.py` now sends the image alongside the text prompt to the configured
+model, using LangChain's standard multimodal message format (`image_url`
+content blocks). **You need to point `HF_MODEL_ID` at a vision-capable
+("image-text-to-text") model that your Hugging Face token has free access
+to** — run `check_models.py` to list candidates. If the multimodal call
+fails for any reason (model/endpoint doesn't actually support it, etc.), the
+agent automatically falls back to a text-only call using just the OCR text
+and logs a warning, so the pipeline keeps running — but OCR-error correction
+quality will suffer without a real vision model. I wasn't able to verify a
+specific free model end-to-end myself (no test data or live network access
+during this review) — please confirm one against `check_models.py`'s output
+before relying on it for your submission.
 
-# Create and activate virtual environment
-python -m venv venv
-# On Windows:
-venv\Scripts\activate
-# On Linux/macOS:
-source venv/bin/activate
+## Sample data note
 
-# Install requirements
-pip install -r requirements.txt
+The task brief refers to sample question blocks (with real options and
+ground-truth answers) provided for evaluation. Those weren't included in the
+files reviewed here, so `run_batch.py` and `mock_tools.py` currently use one
+placeholder block/options set for local testing. Replace `BLOCKS` in
+`run_batch.py` (and the `options` for each block) with the real dataset
+before generating your submission's output file.
 
-```
-
-### 2. Environment Setup
-
-Create a `.env` file in the root directory and add your API credentials:
-
-```env
-HUGGINGFACEHUB_API_TOKEN=your_huggingface_token_here
-DATALAB_API_KEY=your_datalab_api_key_here
-
-```
-
-> **Note on OCR Choice:** This project utilizes the **Datalab OCR API** for parsing scanned document crops and rendering LaTeX equations.
-
----
-
-## 🎮 Running the Application
-
-### Option A: Streamlit Visual Dashboard (Recommended)
-
-To run the interactive UI that visualizes real-time node executions, graph streaming, Persian text rendering, and step-by-step agent decisions:
-
-```bash
-streamlit run app.py
-
-```
-
-### Option B: Terminal Pipeline
-
-To run the agent directly from the command line:
-
-```bash
-python agent.py
-
-```
-
----
-
-## 🏗️ Architecture & Agentic Workflow
-
-The architecture is built on a cyclic graph using `LangGraph`:
-
-```
-       +------------------+
-       |   Input Text     |
-       +--------+---------+
-                |
-                v
-       +------------------+
-  +--->|   Solver Node    |
-  |    +--------+---------+
-  |             |
-  |             v
-  |    +------------------+
-  |    |   Router Node    |
-  |    +--------+---------+
-  |        /          \
-  |  (Failed)      (Solved / Max Cap)
-  |      /              \
-  |     v                v
-  |  +------+        +-------+
-  +--|Refine|        |  END  |
-     +------+        +-------+
-
-```
-
-1. **Solver Node**: Reads the current OCR text. It attempts to evaluate math expressions and solve the question. If noise or corrupted LaTeX is detected, it returns a explicit `FAILED` flag.
-2. **Router**: Inspects the state. If solved or if the maximum retry count is reached, it terminates. Otherwise, it routes control to the `Refiner Node`.
-3. **Refiner Node**: Analyzes corrupted Persian text and garbled math syntax, applying targeted corrections based on mathematical domain context, then loops back to the Solver.
-
----
-
-## 📄 Output Format
-
-Each solved block produces a structured JSON output conforming to the system specification:
-
-```json
-{
-  "answer": "C",
-  "question_text": "۱۱۳- تابع f(x)=mx -nx-k در هر بازه، هم صعودی و هم نزولی است...",
-  "changed": true,
-  "original_ocr_text": "۱۱۳- ت۱بع f(x)=mx -nx-k در هر ب۱زه..."
-}
-
-```
-
-```
-
-```
+See `WRITEUP.md` for the retry cap, best-guess policy, and noise-injection
+details required by the brief.
